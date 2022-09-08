@@ -75,8 +75,28 @@ void run_fmha_fp16_sm80_loop_(Launch_params<FMHA_fprop_params> &launch_params,
                 kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
         }
         dim3 grid(launch_params.params.b, launch_params.params.h);
+
+        cudaEvent_t t_start, t_end;
+        cudaEventCreate(&t_start);
+        cudaEventCreate(&t_end);
+        //warmup
         kernel<<<grid, Kernel_traits::THREADS, smem_size, launch_params.stream>>>(
             launch_params.params);
+        //run 30 times and get average time
+        cudaEventRecord(t_start,launch_params.stream) ;
+        for(int t_iter = 0; t_iter<30 ; t_iter++){
+            kernel<<<grid, Kernel_traits::THREADS, smem_size, launch_params.stream>>>(
+                launch_params.params);
+        }
+        cudaEventRecord(t_end,launch_params.stream);
+        cudaEventSynchronize(t_start);
+        cudaEventSynchronize(t_end);
+        float gpuTime = 0.0;
+	    cudaEventElapsedTime(&gpuTime, t_start, t_end);
+        printf("GPU Time is: %f ms. \n ", gpuTime);
+        cudaEventDestroy(t_start);
+        cudaEventDestroy(t_end);
+
         FMHA_CHECK_CUDA(cudaPeekAtLastError());
     });
 }
